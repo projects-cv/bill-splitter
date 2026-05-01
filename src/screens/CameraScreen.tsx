@@ -1,39 +1,118 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Image, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Image, ActivityIndicator, Alert } from 'react-native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../types';
 import { Colors } from '../theme/colors';
 import { Camera as CameraIcon, Image as ImageIcon, X } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
+import { Platform } from 'react-native';
+import * as FileSystem from 'expo-file-system';
 import { useReceipt } from '../store/ReceiptContext';
 
 type Props = {
   navigation: NativeStackNavigationProp<RootStackParamList, 'Camera'>;
 };
 
-// Mock OCR Data Extraction function
-const mockExtractData = async () => {
-  return new Promise((resolve) => {
-    setTimeout(() => {
-      resolve({
-        id: Math.random().toString(36).substring(7),
-        storeName: 'The Mock Restaurant',
-        date: new Date().toLocaleDateString(),
-        subtotal: 82.50,
-        tax: 7.25,
-        fees: 15.00, // Tip
-        total: 104.75,
-        items: [
-          { id: 'i1', name: 'Cheeseburger', price: 14.50, assignedTo: [] },
-          { id: 'i2', name: 'Margherita Pizza', price: 18.00, assignedTo: [] },
-          { id: 'i3', name: 'Craft Beer', price: 8.00, assignedTo: [] },
-          { id: 'i4', name: 'Diet Coke', price: 3.50, assignedTo: [] },
-          { id: 'i5', name: 'Ribeye Steak', price: 38.50, assignedTo: [] },
-        ],
-        participants: []
-      });
-    }, 2500); // Simulate network/processing delay
-  });
+const extractReceiptData = async (uri: string, base64Data?: string | null) => {
+  const apiKey = process.env.EXPO_PUBLIC_GEMINI_API_KEY;
+  if (!apiKey) {
+    throw new Error('Gemini API key is not configured. Please add EXPO_PUBLIC_GEMINI_API_KEY to your .env file.');
+  }
+
+  try {
+    let base64Image = base64Data;
+
+    if (!base64Image) {
+      if (Platform.OS === 'web') {
+        // Fallback for web if base64 from picker is missing
+        const response = await fetch(uri);
+        const blob = await response.blob();
+        base64Image = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => {
+            const dataUrl = reader.result as string;
+            resolve(dataUrl.split(',')[1]); // remove data:image/...;base64,
+          };
+          reader.onerror = reject;
+          reader.readAsDataURL(blob);
+        });
+      } else {
+        base64Image = await FileSystem.readAsStringAsync(uri, {
+          encoding: FileSystem.EncodingType.Base64,
+        });
+      }
+    }
+
+    const prompt = `
+      Extract the receipt data into JSON format. Include:
+      - storeName (string)
+      - date (string)
+      - subtotal (number)
+      - tax (number)
+      - fees (number, e.g., tip)
+      - total (number)
+      - items (array of objects with 'id' as a unique string, 'name', 'price', and 'assignedTo' as an empty array).
+      If you can't find a value, use 0 for numbers or empty string for text.
+      Only output valid JSON without any markdown formatting or code blocks.
+    `;
+
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${apiKey}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents: [{
+          parts: [
+            { text: prompt },
+            { inline_data: { mime_type: "image/jpeg", data: base64Image } }
+          ]
+        }]
+      })
+    });
+
+    const data = await response.json();
+
+    if (data.error) {
+      try {
+        const modelsRes = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
+        const modelsData = await modelsRes.json();
+        if (modelsData.models) {
+          const names = modelsData.models
+            .map((m: any) => m.name.replace('models/', ''))
+            .join(', ');
+          throw new Error(`${data.error.message}\n\nAvailable Models:\n${names}`);
+        }
+      } catch (e) {
+        // Ignore errors from the models endpoint and fall through
+      }
+      throw new Error(data.error.message || 'Error from Gemini API');
+    }
+
+    let jsonString = data.candidates[0].content.parts[0].text.trim();
+    // Remove markdown code blocks if the model still includes them
+    if (jsonString.startsWith('```json')) {
+      jsonString = jsonString.replace(/^```json\s*/, '').replace(/\s*```$/, '');
+    } else if (jsonString.startsWith('```')) {
+      jsonString = jsonString.replace(/^```\s*/, '').replace(/\s*```$/, '');
+    }
+
+    const parsedData = JSON.parse(jsonString);
+    parsedData.id = Math.random().toString(36).substring(7);
+    parsedData.participants = [];
+
+    // Ensure all items have an assignedTo array and a unique ID
+    if (parsedData.items && Array.isArray(parsedData.items)) {
+      parsedData.items = parsedData.items.map((item: any, idx: number) => ({
+        ...item,
+        id: item.id || `item-${idx}-${Math.random().toString(36).substring(7)}`,
+        assignedTo: item.assignedTo || []
+      }));
+    }
+
+    return parsedData;
+  } catch (error) {
+    console.error('Error extracting receipt:', error);
+    throw error;
+  }
 };
 
 export default function CameraScreen({ navigation }: Props) {
@@ -54,11 +133,12 @@ export default function CameraScreen({ navigation }: Props) {
       const result = await ImagePicker.launchCameraAsync({
         allowsEditing: true,
         quality: 1,
+        base64: true,
       });
 
-      if (!result.canceled) {
+      if (!result.canceled && result.assets[0]) {
         setImage(result.assets[0].uri);
-        processImage(result.assets[0].uri);
+        processImage(result.assets[0].uri, result.assets[0].base64);
       }
     } catch (error) {
       console.log('Error taking picture', error);
@@ -70,23 +150,29 @@ export default function CameraScreen({ navigation }: Props) {
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsEditing: true,
       quality: 1,
+      base64: true,
     });
 
-    if (!result.canceled) {
+    if (!result.canceled && result.assets[0]) {
       setImage(result.assets[0].uri);
-      processImage(result.assets[0].uri);
+      processImage(result.assets[0].uri, result.assets[0].base64);
     }
   };
 
-  const processImage = async (uri: string) => {
+  const processImage = async (uri: string, base64Data?: string | null) => {
     setIsProcessing(true);
-    // In a real app, upload `uri` to your OCR API
-    const extractedData: any = await mockExtractData();
-    setReceipt(extractedData);
-    setIsProcessing(false);
-    
-    // Navigate to next screen
-    navigation.replace('Friends', { receiptId: extractedData.id });
+    try {
+      const extractedData: any = await extractReceiptData(uri, base64Data);
+      setReceipt(extractedData);
+      setIsProcessing(false);
+
+      // Navigate to next screen
+      navigation.replace('Friends', { receiptId: extractedData.id });
+    } catch (error: any) {
+      setIsProcessing(false);
+      setImage(null);
+      Alert.alert('Error', error.message || 'Failed to read receipt. Please try again.');
+    }
   };
 
   if (hasPermission === null) {
@@ -126,7 +212,7 @@ export default function CameraScreen({ navigation }: Props) {
           <TouchableOpacity style={styles.galleryButton} onPress={pickImage}>
             <ImageIcon stroke="#fff" size={28} />
           </TouchableOpacity>
-          
+
           <TouchableOpacity style={styles.captureButtonOuter} onPress={takePicture}>
             <View style={styles.captureButtonInner} />
           </TouchableOpacity>
