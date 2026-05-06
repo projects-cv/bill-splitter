@@ -25,17 +25,21 @@ const extractReceiptData = async (uri: string, base64Data?: string | null) => {
     if (!base64Image) {
       if (Platform.OS === 'web') {
         // Fallback for web if base64 from picker is missing
-        const response = await fetch(uri);
-        const blob = await response.blob();
-        base64Image = await new Promise((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onload = () => {
-            const dataUrl = reader.result as string;
-            resolve(dataUrl.split(',')[1]); // remove data:image/...;base64,
-          };
-          reader.onerror = reject;
-          reader.readAsDataURL(blob);
-        });
+        if (uri.startsWith('data:')) {
+          base64Image = uri.split(',')[1];
+        } else {
+          const response = await fetch(uri);
+          const blob = await response.blob();
+          base64Image = await new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => {
+              const dataUrl = reader.result as string;
+              resolve(dataUrl.split(',')[1]); // remove data:image/...;base64,
+            };
+            reader.onerror = reject;
+            reader.readAsDataURL(blob);
+          });
+        }
       } else {
         base64Image = await FileSystem.readAsStringAsync(uri, {
           encoding: FileSystem.EncodingType.Base64,
@@ -133,7 +137,7 @@ export default function CameraScreen({ navigation }: Props) {
     try {
       const result = await ImagePicker.launchCameraAsync({
         allowsEditing: true,
-        quality: 1,
+        quality: 0.4,
         base64: true,
       });
 
@@ -150,7 +154,7 @@ export default function CameraScreen({ navigation }: Props) {
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsEditing: true,
-      quality: 1,
+      quality: 0.4,
       base64: true,
     });
 
@@ -172,7 +176,11 @@ export default function CameraScreen({ navigation }: Props) {
     } catch (error: any) {
       setIsProcessing(false);
       setImage(null);
-      Alert.alert('Error', error.message || 'Failed to read receipt. Please try again.');
+      if (Platform.OS === 'web') {
+        window.alert(error.message || 'Failed to read receipt. Please try again.');
+      } else {
+        Alert.alert('Error', error.message || 'Failed to read receipt. Please try again.');
+      }
     }
   };
 
