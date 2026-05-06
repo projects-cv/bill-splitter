@@ -52,6 +52,7 @@ const extractReceiptData = async (uri: string, base64Data?: string | null) => {
       - fees (number, e.g., tip)
       - total (number)
       - items (array of objects with 'id' as a unique string, 'name', 'price', and 'assignedTo' as an empty array).
+      IMPORTANT: If a receipt combines multiple quantities for the same item (e.g., "2x Burger $10.00"), separate them into individual items in the array, each representing a single quantity with its individual unit price (e.g., two separate "Burger" items with price 5.00 each).
       If you can't find a value, use 0 for numbers or empty string for text.
       Only output valid JSON without any markdown formatting or code blocks.
     `;
