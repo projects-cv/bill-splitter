@@ -4,6 +4,7 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../types';
 import { Colors } from '../theme/colors';
 import { Camera, Receipt as ReceiptIcon, ChevronRight } from 'lucide-react-native';
+import packageJson from '../../package.json';
 
 type Props = {
   navigation: NativeStackNavigationProp<RootStackParamList, 'Dashboard'>;
@@ -62,6 +63,10 @@ export default function DashboardScreen({ navigation }: Props) {
           </TouchableOpacity>
         )}
       />
+
+      <View style={styles.footer}>
+        <Text style={styles.versionText}>v{packageJson.version}</Text>
+      </View>
     </SafeAreaView>
   );
 }
@@ -182,6 +187,16 @@ const styles = StyleSheet.create({
   oweText: {
     fontSize: 13,
     color: Colors.warning,
+    fontWeight: '500',
+  },
+  footer: {
+    paddingVertical: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  versionText: {
+    fontSize: 12,
+    color: Colors.textLight,
     fontWeight: '500',
   },
 });
