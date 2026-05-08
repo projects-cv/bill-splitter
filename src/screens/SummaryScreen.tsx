@@ -1,10 +1,10 @@
 import React, { useMemo } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, SafeAreaView, Share } from 'react-native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../types';
 import { useReceipt } from '../store/ReceiptContext';
 import { Colors } from '../theme/colors';
-import { CheckCircle2, Home } from 'lucide-react-native';
+import { CheckCircle2, Home, MessageCircle } from 'lucide-react-native';
 
 type Props = {
   navigation: NativeStackNavigationProp<RootStackParamList, 'Summary'>;
@@ -72,6 +72,21 @@ export default function SummaryScreen({ navigation }: Props) {
     navigation.popToTop(); // Go back to Dashboard
   };
 
+  const handleShare = async (person: any) => {
+    try {
+      const amount = person.total.toFixed(2);
+      const note = encodeURIComponent(`Receipt from ${receipt.storeName}`);
+      const venmoLink = `https://venmo.com/?txn=pay&amount=${amount}&note=${note}`;
+      const message = `Hey ${person.name}, you owe $${amount} for ${receipt.storeName}. You can pay me here: ${venmoLink}`;
+      
+      await Share.share({
+        message,
+      });
+    } catch (error) {
+      console.log('Error sharing:', error);
+    }
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContent}>
@@ -120,13 +135,22 @@ export default function SummaryScreen({ navigation }: Props) {
               <View style={[styles.avatar, { backgroundColor: person.color }]}>
                 <Text style={styles.avatarText}>{person.name.charAt(0).toUpperCase()}</Text>
               </View>
-              <Text style={styles.personName}>{person.name}</Text>
-              <Text style={styles.personTotal}>${person.total.toFixed(2)}</Text>
-            </View>
-            <View style={styles.personDetails}>
-              <Text style={styles.personSubtext}>
-                Items: ${person.subtotal.toFixed(2)}  •  Tax/Fees: ${person.additional.toFixed(2)}
-              </Text>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.personName}>{person.name}</Text>
+                <Text style={styles.personSubtext}>
+                  Items: ${person.subtotal.toFixed(2)}  •  Tax/Fees: ${person.additional.toFixed(2)}
+                </Text>
+              </View>
+              <View style={{ alignItems: 'flex-end' }}>
+                <Text style={styles.personTotal}>${person.total.toFixed(2)}</Text>
+                <TouchableOpacity 
+                  style={styles.shareButton} 
+                  onPress={() => handleShare(person)}
+                >
+                  <MessageCircle stroke={Colors.primary} size={14} style={{ marginRight: 4 }} />
+                  <Text style={styles.shareText}>Text Request</Text>
+                </TouchableOpacity>
+              </View>
             </View>
           </View>
         ))}
@@ -273,12 +297,23 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: Colors.text,
   },
-  personDetails: {
-    marginLeft: 44, // Align with text
-  },
   personSubtext: {
     fontSize: 13,
     color: Colors.textLight,
+  },
+  shareButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.primarySoft,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 12,
+    marginTop: 6,
+  },
+  shareText: {
+    color: Colors.primary,
+    fontSize: 12,
+    fontWeight: '600',
   },
   footer: {
     paddingHorizontal: 24,
