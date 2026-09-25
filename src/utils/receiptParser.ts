@@ -16,6 +16,8 @@ export function parseReceiptText(rawText: string): Receipt {
   let subtotal = 0;
   let tax = 0;
   let fees = 0;
+  let promoDiscount = 0;
+  let promoCode = '';
   let total = 0;
   const items: LineItem[] = [];
 
@@ -52,13 +54,19 @@ export function parseReceiptText(rawText: string): Receipt {
       const priceVal = parseFloat(priceMatch[1]);
       const lowerLine = line.toLowerCase();
 
-      // Check if this line is Subtotal, Tax, Tip/Fee, or Total
+      // Check if this line is Subtotal, Tax, Tip/Fee, Promo/Discount, or Total
       if (lowerLine.includes('subtotal') || lowerLine.includes('sub total') || lowerLine.includes('sub-total')) {
         subtotal = priceVal;
       } else if (lowerLine.includes('tax') || lowerLine.includes('vat') || lowerLine.includes('hst') || lowerLine.includes('gst')) {
         tax = priceVal;
       } else if (lowerLine.includes('tip') || lowerLine.includes('gratuity') || lowerLine.includes('fee') || lowerLine.includes('service')) {
         fees += priceVal;
+      } else if (lowerLine.includes('promo') || lowerLine.includes('discount') || lowerLine.includes('coupon') || lowerLine.includes('voucher') || lowerLine.includes('credit') || (line.includes('-') && (lowerLine.includes('off') || lowerLine.includes('save')))) {
+        promoDiscount += priceVal;
+        if (!promoCode) {
+          const cleanedName = line.replace(priceRegex, '').replace(/[\$\*\#\-\:\_]/g, '').trim();
+          promoCode = cleanedName || 'PROMO';
+        }
       } else if (lowerLine.includes('total') || lowerLine.includes('amount due') || lowerLine.includes('balance')) {
         // Avoid matching subtotal line again
         if (!lowerLine.includes('sub')) {
@@ -110,7 +118,7 @@ export function parseReceiptText(rawText: string): Receipt {
   }
 
   if (total === 0) {
-    total = parseFloat((subtotal + tax + fees).toFixed(2));
+    total = parseFloat(Math.max(0, subtotal + tax + fees - promoDiscount).toFixed(2));
   }
 
   return {
@@ -120,6 +128,9 @@ export function parseReceiptText(rawText: string): Receipt {
     subtotal,
     tax,
     fees,
+    promoDiscount: promoDiscount > 0 ? parseFloat(promoDiscount.toFixed(2)) : 0,
+    promoCode: promoDiscount > 0 ? (promoCode || 'PROMO') : undefined,
+    promoSplitMethod: 'item_cost_percent',
     total,
     items,
     participants: [],

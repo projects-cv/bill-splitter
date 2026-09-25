@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, ReactNode } from 'react';
-import { Receipt, Participant, LineItem } from '../types';
+import { Receipt, Participant, LineItem, PromoSplitMethod } from '../types';
 
 interface ReceiptContextType {
   receipt: Receipt | null;
@@ -12,6 +12,9 @@ interface ReceiptContextType {
   addItem: (name: string, price: number) => void;
   updateItem: (id: string, updates: { name?: string; price?: number }) => void;
   removeItem: (id: string) => void;
+  applyPromoCode: (amount: number, code?: string, splitMethod?: PromoSplitMethod) => void;
+  removePromoCode: () => void;
+  setPromoSplitMethod: (method: PromoSplitMethod) => void;
   reset: () => void;
 }
 
@@ -83,9 +86,10 @@ export const ReceiptProvider = ({ children }: { children: ReactNode }) => {
     };
     const updatedItems = [...receipt.items, newItem];
     const newSubtotal = parseFloat(updatedItems.reduce((sum, item) => sum + item.price, 0).toFixed(2));
-    const wasDerived = Math.abs(receipt.total - (receipt.subtotal + receipt.tax + receipt.fees)) < 0.05;
+    const currentPromo = receipt.promoDiscount || 0;
+    const wasDerived = Math.abs(receipt.total - (receipt.subtotal + receipt.tax + receipt.fees - currentPromo)) < 0.05;
     const newTotal = wasDerived || receipt.total === 0
-      ? parseFloat((newSubtotal + receipt.tax + receipt.fees).toFixed(2))
+      ? parseFloat(Math.max(0, newSubtotal + receipt.tax + receipt.fees - currentPromo).toFixed(2))
       : receipt.total;
 
     updateReceipt({
@@ -108,9 +112,10 @@ export const ReceiptProvider = ({ children }: { children: ReactNode }) => {
       return item;
     });
     const newSubtotal = parseFloat(updatedItems.reduce((sum, item) => sum + item.price, 0).toFixed(2));
-    const wasDerived = Math.abs(receipt.total - (receipt.subtotal + receipt.tax + receipt.fees)) < 0.05;
+    const currentPromo = receipt.promoDiscount || 0;
+    const wasDerived = Math.abs(receipt.total - (receipt.subtotal + receipt.tax + receipt.fees - currentPromo)) < 0.05;
     const newTotal = wasDerived || receipt.total === 0
-      ? parseFloat((newSubtotal + receipt.tax + receipt.fees).toFixed(2))
+      ? parseFloat(Math.max(0, newSubtotal + receipt.tax + receipt.fees - currentPromo).toFixed(2))
       : receipt.total;
 
     updateReceipt({
@@ -124,9 +129,10 @@ export const ReceiptProvider = ({ children }: { children: ReactNode }) => {
     if (!receipt) return;
     const updatedItems = receipt.items.filter(item => item.id !== id);
     const newSubtotal = parseFloat(updatedItems.reduce((sum, item) => sum + item.price, 0).toFixed(2));
-    const wasDerived = Math.abs(receipt.total - (receipt.subtotal + receipt.tax + receipt.fees)) < 0.05;
+    const currentPromo = receipt.promoDiscount || 0;
+    const wasDerived = Math.abs(receipt.total - (receipt.subtotal + receipt.tax + receipt.fees - currentPromo)) < 0.05;
     const newTotal = wasDerived || receipt.total === 0
-      ? parseFloat((newSubtotal + receipt.tax + receipt.fees).toFixed(2))
+      ? parseFloat(Math.max(0, newSubtotal + receipt.tax + receipt.fees - currentPromo).toFixed(2))
       : receipt.total;
 
     updateReceipt({
@@ -134,6 +140,45 @@ export const ReceiptProvider = ({ children }: { children: ReactNode }) => {
       subtotal: newSubtotal,
       total: newTotal,
     });
+  };
+
+  const applyPromoCode = (amount: number, code?: string, splitMethod?: PromoSplitMethod) => {
+    if (!receipt) return;
+    const promoDiscount = Math.max(0, parseFloat(amount.toFixed(2)));
+    const promoCode = code !== undefined ? code.trim() : (receipt.promoCode || 'PROMO');
+    const method = splitMethod || receipt.promoSplitMethod || 'item_cost_percent';
+    const oldPromo = receipt.promoDiscount || 0;
+    const wasDerived = Math.abs(receipt.total - (receipt.subtotal + receipt.tax + receipt.fees - oldPromo)) < 0.05;
+    const newTotal = wasDerived || receipt.total === 0
+      ? parseFloat(Math.max(0, receipt.subtotal + receipt.tax + receipt.fees - promoDiscount).toFixed(2))
+      : receipt.total;
+
+    updateReceipt({
+      promoDiscount,
+      promoCode,
+      promoSplitMethod: method,
+      total: newTotal,
+    });
+  };
+
+  const removePromoCode = () => {
+    if (!receipt) return;
+    const oldPromo = receipt.promoDiscount || 0;
+    const wasDerived = Math.abs(receipt.total - (receipt.subtotal + receipt.tax + receipt.fees - oldPromo)) < 0.05;
+    const newTotal = wasDerived || receipt.total === 0
+      ? parseFloat((receipt.subtotal + receipt.tax + receipt.fees).toFixed(2))
+      : receipt.total;
+
+    updateReceipt({
+      promoDiscount: 0,
+      promoCode: undefined,
+      total: newTotal,
+    });
+  };
+
+  const setPromoSplitMethod = (method: PromoSplitMethod) => {
+    if (!receipt) return;
+    updateReceipt({ promoSplitMethod: method });
   };
 
   const reset = () => setReceipt(null);
@@ -150,6 +195,9 @@ export const ReceiptProvider = ({ children }: { children: ReactNode }) => {
       addItem,
       updateItem,
       removeItem,
+      applyPromoCode,
+      removePromoCode,
+      setPromoSplitMethod,
       reset
     }}>
       {children}

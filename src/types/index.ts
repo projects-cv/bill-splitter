@@ -11,6 +11,8 @@ export type LineItem = {
   assignedTo: string[]; // Array of participant IDs
 };
 
+export type PromoSplitMethod = 'item_cost_percent' | 'item_count_percent' | 'equal';
+
 export type Receipt = {
   id: string;
   storeName: string;
@@ -18,6 +20,9 @@ export type Receipt = {
   subtotal: number;
   tax: number;
   fees: number;
+  promoDiscount?: number;
+  promoCode?: string;
+  promoSplitMethod?: PromoSplitMethod;
   total: number;
   items: LineItem[];
   participants: Participant[];

@@ -17,7 +17,7 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList, LineItem } from '../types';
 import { useReceipt } from '../store/ReceiptContext';
 import { Colors } from '../theme/colors';
-import { Check, ArrowRight, Plus, Pencil, Trash2, X } from 'lucide-react-native';
+import { Check, ArrowRight, Plus, Pencil, Trash2, X, Tag } from 'lucide-react-native';
 
 type Props = {
   navigation: NativeStackNavigationProp<RootStackParamList, 'ItemAssignment'>;
@@ -231,16 +231,27 @@ export default function ItemAssignmentScreen({ navigation }: Props) {
           );
         }}
         ListFooterComponent={
-          receipt.items.length > 0 ? (
-            <TouchableOpacity 
-              style={styles.addMoreButton} 
-              onPress={handleOpenAddModal}
-              activeOpacity={0.7}
-            >
-              <Plus stroke={Colors.primary} size={18} style={{ marginRight: 6 }} />
-              <Text style={styles.addMoreButtonText}>Add Missing Item</Text>
-            </TouchableOpacity>
-          ) : null
+          <View>
+            {receipt.items.length > 0 && (
+              <TouchableOpacity 
+                style={styles.addMoreButton} 
+                onPress={handleOpenAddModal}
+                activeOpacity={0.7}
+              >
+                <Plus stroke={Colors.primary} size={18} style={{ marginRight: 6 }} />
+                <Text style={styles.addMoreButtonText}>Add Missing Item</Text>
+              </TouchableOpacity>
+            )}
+
+            {receipt.promoDiscount && receipt.promoDiscount > 0 ? (
+              <View style={styles.promoIndicatorCard}>
+                <Tag stroke={Colors.success} size={16} style={{ marginRight: 8 }} />
+                <Text style={styles.promoIndicatorText}>
+                  Promo Applied: <Text style={{ fontWeight: '700' }}>-${receipt.promoDiscount.toFixed(2)}</Text> ({receipt.promoCode || 'PROMO'})
+                </Text>
+              </View>
+            ) : null}
+          </View>
         }
         ListEmptyComponent={
           <View style={styles.emptyState}>
@@ -739,5 +750,22 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',
+  },
+  promoIndicatorCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.successSoft,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#A7F3D0',
+    marginTop: 8,
+    marginBottom: 16,
+  },
+  promoIndicatorText: {
+    color: '#065F46',
+    fontSize: 13,
+    fontWeight: '500',
   },
 });
