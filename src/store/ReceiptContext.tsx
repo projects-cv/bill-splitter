@@ -9,6 +9,9 @@ interface ReceiptContextType {
   removeParticipant: (id: string) => void;
   assignItem: (itemId: string, participantId: string) => void;
   unassignItem: (itemId: string, participantId: string) => void;
+  addItem: (name: string, price: number) => void;
+  updateItem: (id: string, updates: { name?: string; price?: number }) => void;
+  removeItem: (id: string) => void;
   reset: () => void;
 }
 
@@ -70,11 +73,84 @@ export const ReceiptProvider = ({ children }: { children: ReactNode }) => {
     updateReceipt({ items: updatedItems });
   };
 
+  const addItem = (name: string, price: number) => {
+    if (!receipt) return;
+    const newItem: LineItem = {
+      id: `item-${Date.now()}-${Math.random().toString(36).substring(7)}`,
+      name: name.trim() || 'New Item',
+      price: parseFloat(price.toFixed(2)),
+      assignedTo: [],
+    };
+    const updatedItems = [...receipt.items, newItem];
+    const newSubtotal = parseFloat(updatedItems.reduce((sum, item) => sum + item.price, 0).toFixed(2));
+    const wasDerived = Math.abs(receipt.total - (receipt.subtotal + receipt.tax + receipt.fees)) < 0.05;
+    const newTotal = wasDerived || receipt.total === 0
+      ? parseFloat((newSubtotal + receipt.tax + receipt.fees).toFixed(2))
+      : receipt.total;
+
+    updateReceipt({
+      items: updatedItems,
+      subtotal: newSubtotal,
+      total: newTotal,
+    });
+  };
+
+  const updateItem = (id: string, updates: { name?: string; price?: number }) => {
+    if (!receipt) return;
+    const updatedItems = receipt.items.map(item => {
+      if (item.id === id) {
+        return {
+          ...item,
+          name: updates.name !== undefined ? updates.name.trim() : item.name,
+          price: updates.price !== undefined ? parseFloat(updates.price.toFixed(2)) : item.price,
+        };
+      }
+      return item;
+    });
+    const newSubtotal = parseFloat(updatedItems.reduce((sum, item) => sum + item.price, 0).toFixed(2));
+    const wasDerived = Math.abs(receipt.total - (receipt.subtotal + receipt.tax + receipt.fees)) < 0.05;
+    const newTotal = wasDerived || receipt.total === 0
+      ? parseFloat((newSubtotal + receipt.tax + receipt.fees).toFixed(2))
+      : receipt.total;
+
+    updateReceipt({
+      items: updatedItems,
+      subtotal: newSubtotal,
+      total: newTotal,
+    });
+  };
+
+  const removeItem = (id: string) => {
+    if (!receipt) return;
+    const updatedItems = receipt.items.filter(item => item.id !== id);
+    const newSubtotal = parseFloat(updatedItems.reduce((sum, item) => sum + item.price, 0).toFixed(2));
+    const wasDerived = Math.abs(receipt.total - (receipt.subtotal + receipt.tax + receipt.fees)) < 0.05;
+    const newTotal = wasDerived || receipt.total === 0
+      ? parseFloat((newSubtotal + receipt.tax + receipt.fees).toFixed(2))
+      : receipt.total;
+
+    updateReceipt({
+      items: updatedItems,
+      subtotal: newSubtotal,
+      total: newTotal,
+    });
+  };
+
   const reset = () => setReceipt(null);
 
   return (
     <ReceiptContext.Provider value={{
-      receipt, setReceipt, updateReceipt, addParticipant, removeParticipant, assignItem, unassignItem, reset
+      receipt,
+      setReceipt,
+      updateReceipt,
+      addParticipant,
+      removeParticipant,
+      assignItem,
+      unassignItem,
+      addItem,
+      updateItem,
+      removeItem,
+      reset
     }}>
       {children}
     </ReceiptContext.Provider>

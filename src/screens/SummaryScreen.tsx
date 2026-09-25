@@ -4,7 +4,7 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../types';
 import { useReceipt } from '../store/ReceiptContext';
 import { Colors } from '../theme/colors';
-import { CheckCircle2, Home, MessageCircle } from 'lucide-react-native';
+import { CheckCircle2, Home, MessageCircle, Pencil } from 'lucide-react-native';
 
 type Props = {
   navigation: NativeStackNavigationProp<RootStackParamList, 'Summary'>;
@@ -103,12 +103,32 @@ export default function SummaryScreen({ navigation }: Props) {
                 ? "Everything looks good to go." 
                 : `Calculated: $${calculatedTotal.toFixed(2)} | Receipt: $${receipt.total.toFixed(2)}`}
             </Text>
+            {!isMatch && (
+              <TouchableOpacity 
+                style={styles.fixItemsButton} 
+                onPress={() => navigation.navigate('ItemAssignment', {})}
+                activeOpacity={0.7}
+              >
+                <Pencil stroke="#B45309" size={13} style={{ marginRight: 4 }} />
+                <Text style={styles.fixItemsButtonText}>Edit Items or Prices</Text>
+              </TouchableOpacity>
+            )}
           </View>
         </View>
 
         {/* Receipt Overview */}
         <View style={styles.card}>
-          <Text style={styles.sectionTitle}>Receipt Summary</Text>
+          <View style={styles.cardHeader}>
+            <Text style={styles.sectionTitle}>Receipt Summary</Text>
+            <TouchableOpacity 
+              style={styles.editItemsLink} 
+              onPress={() => navigation.navigate('ItemAssignment', {})}
+              activeOpacity={0.7}
+            >
+              <Pencil stroke={Colors.primary} size={13} style={{ marginRight: 4 }} />
+              <Text style={styles.editItemsLinkText}>Edit Items</Text>
+            </TouchableOpacity>
+          </View>
           <View style={styles.row}>
             <Text style={styles.rowLabel}>Subtotal</Text>
             <Text style={styles.rowValue}>${receipt.subtotal.toFixed(2)}</Text>
@@ -221,7 +241,40 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '700',
     color: Colors.text,
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     marginBottom: 16,
+  },
+  editItemsLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+    backgroundColor: Colors.primarySoft,
+  },
+  editItemsLinkText: {
+    color: Colors.primary,
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  fixItemsButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 8,
+    alignSelf: 'flex-start',
+    backgroundColor: '#FEF3C7',
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+  },
+  fixItemsButtonText: {
+    color: '#B45309',
+    fontSize: 13,
+    fontWeight: '600',
   },
   sectionTitleOuter: {
     fontSize: 20,
