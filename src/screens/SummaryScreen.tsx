@@ -22,8 +22,19 @@ type Props = {
   navigation: NativeStackNavigationProp<RootStackParamList, 'Summary'>;
 };
 
+const amountLabels = {
+  subtotal: 'Subtotal',
+  tax: 'Tax',
+  fees: 'Tips & Fees',
+  total: 'Total',
+};
+type AmountField = keyof typeof amountLabels;
+
 export default function SummaryScreen({ navigation }: Props) {
-  const { receipt, reset, applyPromoCode, removePromoCode, setPromoSplitMethod } = useReceipt();
+  const { receipt, updateReceipt, reset, applyPromoCode, removePromoCode, setPromoSplitMethod } = useReceipt();
+  const [editingAmount, setEditingAmount] = useState<AmountField | null>(null);
+  const [amountInput, setAmountInput] = useState('');
+  const [amountError, setAmountError] = useState<string | null>(null);
 
   // Promo Code Modal State
   const [isPromoModalVisible, setIsPromoModalVisible] = useState(false);
@@ -235,6 +246,49 @@ export default function SummaryScreen({ navigation }: Props) {
     setIsPromoModalVisible(false);
   };
 
+  const handleOpenAmountModal = (field: AmountField) => {
+    setAmountInput(receipt[field].toFixed(2));
+    setAmountError(null);
+    setEditingAmount(field);
+  };
+
+  const handleSaveAmount = () => {
+    if (!editingAmount) return;
+    const input = amountInput.trim();
+    const amount = Number(input);
+    if (!/^(?:\d+(?:\.\d{0,2})?|\.\d{1,2})$/.test(input)
+      || !Number.isFinite(amount) || !Number.isSafeInteger(Math.round(amount * 100))) {
+      setAmountError('Enter a non-negative amount with up to two decimal places (e.g. 9.99).');
+      return;
+    }
+
+    const updates = { [editingAmount]: amount };
+    // Keep totals that follow the receipt breakdown in sync, as item and promo edits do.
+    const discount = receipt.promoDiscount || 0;
+    const wasDerived = Math.abs(receipt.total - Math.max(0, receipt.subtotal + receipt.tax + receipt.fees - discount)) < 0.05;
+    if (editingAmount !== 'total' && wasDerived) {
+      const updated = { ...receipt, ...updates };
+      updates.total = Number(Math.max(0, updated.subtotal + updated.tax + updated.fees - discount).toFixed(2));
+    }
+    updateReceipt(updates);
+    setEditingAmount(null);
+  };
+
+  const renderAmountButton = (field: AmountField) => (
+    <TouchableOpacity
+      style={styles.amountButton}
+      onPress={() => handleOpenAmountModal(field)}
+      accessibilityRole="button"
+      accessibilityLabel={`Edit ${amountLabels[field]}, $${receipt[field].toFixed(2)}`}
+      activeOpacity={0.7}
+    >
+      <Text style={field === 'total' ? styles.totalValue : styles.rowValue}>
+        ${receipt[field].toFixed(2)}
+      </Text>
+      <Pencil stroke={Colors.primary} size={14} style={{ marginLeft: 8 }} />
+    </TouchableOpacity>
+  );
+
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContent}>
@@ -279,15 +333,15 @@ export default function SummaryScreen({ navigation }: Props) {
           </View>
           <View style={styles.row}>
             <Text style={styles.rowLabel}>Subtotal</Text>
-            <Text style={styles.rowValue}>${receipt.subtotal.toFixed(2)}</Text>
+            {renderAmountButton('subtotal')}
           </View>
           <View style={styles.row}>
             <Text style={styles.rowLabel}>Tax</Text>
-            <Text style={styles.rowValue}>${receipt.tax.toFixed(2)}</Text>
+            {renderAmountButton('tax')}
           </View>
           <View style={styles.row}>
-            <Text style={styles.rowLabel}>Fees & Tip</Text>
-            <Text style={styles.rowValue}>${receipt.fees.toFixed(2)}</Text>
+            <Text style={styles.rowLabel}>Tips & Fees</Text>
+            {renderAmountButton('fees')}
           </View>
           {promoDiscount > 0 && (
             <View style={styles.row}>
@@ -303,7 +357,7 @@ export default function SummaryScreen({ navigation }: Props) {
           )}
           <View style={[styles.row, styles.totalRow]}>
             <Text style={styles.totalLabel}>Total</Text>
-            <Text style={styles.totalValue}>${receipt.total.toFixed(2)}</Text>
+            {renderAmountButton('total')}
           </View>
         </View>
 
@@ -494,6 +548,64 @@ export default function SummaryScreen({ navigation }: Props) {
         ))}
 
       </ScrollView>
+
+      <Modal
+        visible={editingAmount !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setEditingAmount(null)}
+      >
+        <KeyboardAvoidingView
+          style={styles.modalBackdrop}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        >
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Edit {editingAmount ? amountLabels[editingAmount] : 'Amount'}</Text>
+              <TouchableOpacity
+                onPress={() => setEditingAmount(null)}
+                style={styles.modalCloseButton}
+                accessibilityRole="button"
+                accessibilityLabel="Close amount editor"
+              >
+                <X stroke={Colors.textMuted} size={22} />
+              </TouchableOpacity>
+            </View>
+            {amountError && (
+              <View style={styles.errorBanner}>
+                <Text style={styles.errorBannerText} accessibilityRole="alert">{amountError}</Text>
+              </View>
+            )}
+            <View style={styles.formGroup}>
+              <Text style={styles.formLabel}>{editingAmount ? amountLabels[editingAmount] : 'Amount'} ($)</Text>
+              <View style={styles.priceInputWrapper}>
+                <Text style={styles.currencyPrefix}>$</Text>
+                <TextInput
+                  style={styles.priceInput}
+                  value={amountInput}
+                  onChangeText={value => { setAmountInput(value); setAmountError(null); }}
+                  accessibilityLabel={editingAmount ? amountLabels[editingAmount] : 'Amount'}
+                  placeholder="0.00"
+                  placeholderTextColor={Colors.textLight}
+                  keyboardType="decimal-pad"
+                  returnKeyType="done"
+                  autoFocus
+                  selectTextOnFocus
+                  onSubmitEditing={handleSaveAmount}
+                />
+              </View>
+            </View>
+            <View style={styles.modalButtonsRow}>
+              <TouchableOpacity style={styles.modalCancelButton} onPress={() => setEditingAmount(null)} accessibilityRole="button">
+                <Text style={styles.modalCancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.modalSaveButton} onPress={handleSaveAmount} accessibilityRole="button">
+                <Text style={styles.modalSaveButtonText}>Save Changes</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
 
       {/* Add / Edit Promo Code Modal */}
       <Modal
@@ -713,6 +825,13 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '700',
     color: Colors.text,
+  },
+  amountButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    minHeight: 44,
+    paddingLeft: 12,
   },
   cardHeader: {
     flexDirection: 'row',
