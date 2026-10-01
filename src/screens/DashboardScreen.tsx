@@ -6,17 +6,26 @@ import { Colors } from '../theme/colors';
 import { Camera, Receipt as ReceiptIcon, ChevronRight } from 'lucide-react-native';
 import packageJson from '../../package.json';
 import { useReceipt } from '../store/ReceiptContext';
+import { useAuth } from '../store/AuthContext';
 
 type Props = {
   navigation: NativeStackNavigationProp<RootStackParamList, 'Dashboard'>;
 };
 
 export default function DashboardScreen({ navigation }: Props) {
-  const { savedReceipts, setReceipt, isHistoryLoading, historyError, retryHistory } = useReceipt();
+  const { session, signOut } = useAuth();
+  const { savedReceipts, setReceipt, isHistoryLoading, historyError, retryHistory,
+    hasLegacyReceipts, isImportingHistory, importLegacyReceipts } = useReceipt();
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.greeting}>Hello, Casey 👋</Text>
+        <View style={styles.accountRow}>
+          <Text style={styles.accountPhone}>{session?.user.phone}</Text>
+          <TouchableOpacity accessibilityRole="button" onPress={() => { void signOut(); }} style={styles.signOutButton}>
+            <Text style={styles.retryText}>Sign out</Text>
+          </TouchableOpacity>
+        </View>
+        <Text style={styles.greeting}>Your bill splits</Text>
         <Text style={styles.subtitle}>Let's split some bills!</Text>
       </View>
 
@@ -34,6 +43,16 @@ export default function DashboardScreen({ navigation }: Props) {
       <View style={styles.listHeader}>
         <Text style={styles.sectionTitle}>Recent Splits</Text>
       </View>
+
+      {hasLegacyReceipts && (
+        <View style={styles.historyMessage}>
+          <Text style={styles.subtitle}>Have splits saved here before accounts were added? Import them if they’re yours.</Text>
+          <TouchableOpacity style={styles.signOutButton} accessibilityRole="button" disabled={isImportingHistory}
+            onPress={() => { void importLegacyReceipts(); }}>
+            <Text style={styles.retryText}>{isImportingHistory ? 'Importing…' : 'Import old splits into my account'}</Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
       {historyError && (
         <View style={styles.historyMessage}>
@@ -104,6 +123,9 @@ const styles = StyleSheet.create({
     paddingTop: 40,
     paddingBottom: 20,
   },
+  accountRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
+  accountPhone: { color: Colors.textMuted, fontSize: 14 },
+  signOutButton: { minHeight: 44, justifyContent: 'center', paddingHorizontal: 8 },
   greeting: {
     fontSize: 28,
     fontWeight: '700',

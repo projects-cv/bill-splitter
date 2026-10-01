@@ -1,0 +1,14 @@
+[build]
+  command = "npx expo export --platform web"
+  publish = "dist"
+
+[build.environment]
+  # Public authentication configuration; these are not secret credentials.
+  EXPO_PUBLIC_DESCOPE_PROJECT_ID = "P3K6TbhL6uPFJq3qrajpkfH2h98e"
+  EXPO_PUBLIC_AUTH_REDIRECT_URL = "https://cvbillsplitter.netlify.app/"
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    Referrer-Policy = "no-referrer"
+    X-Content-Type-Options = "nosniff"

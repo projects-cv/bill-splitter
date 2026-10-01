@@ -9,6 +9,9 @@ interface ReceiptContextType {
   isHistoryLoading: boolean;
   historyError: string | null;
   retryHistory: () => void;
+  hasLegacyReceipts: boolean;
+  isImportingHistory: boolean;
+  importLegacyReceipts: () => Promise<void>;
   setReceipt: (receipt: Receipt | null) => void;
   updateReceipt: (updates: Partial<Receipt>) => void;
   addParticipant: (name: string, color: string) => void;
@@ -26,9 +29,9 @@ interface ReceiptContextType {
 
 const ReceiptContext = createContext<ReceiptContextType | undefined>(undefined);
 
-export const ReceiptProvider = ({ children }: { children: ReactNode }) => {
+export const ReceiptProvider = ({ children, userId }: { children: ReactNode; userId: string }) => {
   const [receipt, setReceipt] = useState<Receipt | null>(null);
-  const history = useReceiptHistory();
+  const history = useReceiptHistory(userId);
 
   const updateReceipt = (updates: Partial<Receipt>) => {
     setReceipt(prev => prev ? { ...prev, ...updates } : null);

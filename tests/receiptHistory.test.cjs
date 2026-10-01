@@ -70,7 +70,7 @@ function hookHarness(history) {
       for (let i = 0; i < 20; i++) {
         if (dirty) {
           dirty = false; cursor = 0; effects = [];
-          value = useReceiptHistory();
+          value = useReceiptHistory('test-user');
           effects.forEach(run => run());
         }
         await new Promise(resolve => setImmediate(resolve));
@@ -176,10 +176,44 @@ test('tapping a real recent split selects it before navigating to Summary', () =
     react, 'react-native': native, '../theme/colors': { Colors: {} }, 'lucide-react-native': {},
     '../../package.json': { version: 'test' },
     '../store/ReceiptContext': { useReceipt: () => ({ savedReceipts: [split], setReceipt: value => actions.push(value) }) },
+    '../store/AuthContext': { useAuth: () => ({ session: { user: { phone: '+14155550123' } }, signOut() {} }) },
   });
   const tree = Dashboard({ navigation: { navigate: (...args) => actions.push(args) } });
   const list = tree.props.children.find(child => child?.type === 'FlatList');
   assert.deepEqual(list.props.data, [split]);
   list.props.renderItem({ item: split }).props.onPress();
   assert.deepEqual(actions, [split, ['Summary', { receiptId: 'saved' }]]);
+});
+
+test('account histories are isolated and legacy receipts are imported only on request', async () => {
+  const storage = new Map();
+  const history = storageModule({
+    getItem: async key => storage.get(key) ?? null,
+    setItem: async (key, value) => { storage.set(key, value); },
+    removeItem: async key => { storage.delete(key); },
+  });
+  await history.saveReceiptHistory([receipt('legacy')]);
+  await history.saveReceiptHistory([receipt('alice')], 'alice');
+  await history.saveReceiptHistory([receipt('bob')], 'bob');
+  assert.deepEqual(await history.loadReceiptHistory('alice'), [receipt('alice')]);
+  assert.deepEqual(await history.loadReceiptHistory('bob'), [receipt('bob')]);
+  assert.equal(await history.hasLegacyHistory(), true);
+  await history.importLegacyHistory('alice');
+  assert.deepEqual(await history.loadReceiptHistory('alice'), [receipt('alice'), receipt('legacy')]);
+  assert.deepEqual(await history.loadReceiptHistory('bob'), [receipt('bob')]);
+  assert.equal(await history.hasLegacyHistory(), false);
+});
+
+test('an unsuccessful import preserves the original receipts', async () => {
+  const storage = new Map();
+  let fail = false;
+  const history = storageModule({
+    getItem: async key => storage.get(key) ?? null,
+    setItem: async (key, value) => { if (fail) throw new Error('Full'); storage.set(key, value); },
+    removeItem: async key => { storage.delete(key); },
+  });
+  await history.saveReceiptHistory([receipt('legacy')]);
+  fail = true;
+  await assert.rejects(history.importLegacyHistory('alice'));
+  assert.deepEqual(await history.loadReceiptHistory(), [receipt('legacy')]);
 });

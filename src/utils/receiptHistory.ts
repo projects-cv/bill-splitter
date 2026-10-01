@@ -24,8 +24,12 @@ function isReceipt(value: unknown): value is Receipt {
       && Array.isArray(item.assignedTo) && item.assignedTo.every(id => typeof id === 'string'));
 }
 
-export async function loadReceiptHistory(): Promise<Receipt[]> {
-  const stored = await AsyncStorage.getItem(STORAGE_KEY);
+function storageKey(userId?: string) {
+  return userId ? `${STORAGE_KEY}.user.${encodeURIComponent(userId)}` : STORAGE_KEY;
+}
+
+async function readReceiptHistory(userId?: string): Promise<Receipt[]> {
+  const stored = await AsyncStorage.getItem(storageKey(userId));
   if (stored === null) return [];
   const parsed: unknown = JSON.parse(stored);
   if (!Array.isArray(parsed) || !parsed.every(isReceipt)) {
@@ -34,11 +38,36 @@ export async function loadReceiptHistory(): Promise<Receipt[]> {
   return parsed;
 }
 
-export function saveReceiptHistory(receipts: Receipt[]): Promise<void> {
+export async function loadReceiptHistory(userId?: string): Promise<Receipt[]> {
+  // A remounted account must see edits already queued by its previous screen.
+  await pendingWrite;
+  return readReceiptHistory(userId);
+}
+
+export function saveReceiptHistory(receipts: Receipt[], userId?: string): Promise<void> {
   const snapshot = JSON.stringify(receipts);
   // Serialize writes so an older snapshot cannot finish after a newer edit.
-  const write = pendingWrite.then(() => AsyncStorage.setItem(STORAGE_KEY, snapshot));
+  const write = pendingWrite.then(() => AsyncStorage.setItem(storageKey(userId), snapshot));
   pendingWrite = write.catch(() => undefined);
+  return write;
+}
+
+export async function hasLegacyHistory(): Promise<boolean> {
+  const stored = await AsyncStorage.getItem(STORAGE_KEY);
+  return stored !== null && stored !== '[]';
+}
+
+export function importLegacyHistory(userId: string): Promise<Receipt[]> {
+  const write = pendingWrite.then(async () => {
+    const current = await readReceiptHistory(userId);
+    const legacy = await readReceiptHistory();
+    const merged = mergeReceiptHistory(current, legacy);
+    await AsyncStorage.setItem(storageKey(userId), JSON.stringify(merged));
+    // The original remains available if saving the imported copy fails.
+    await AsyncStorage.removeItem(STORAGE_KEY);
+    return merged;
+  });
+  pendingWrite = write.then(() => undefined, () => undefined);
   return write;
 }
 

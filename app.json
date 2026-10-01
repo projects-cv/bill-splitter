@@ -2,6 +2,7 @@
   "expo": {
     "name": "bill-splitter",
     "slug": "bill-splitter",
+    "scheme": "billsplitter",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -38,7 +39,8 @@
         {
           "photosPermission": "Allow Bill Splitter to access your photos to scan receipt images."
         }
-      ]
+      ],
+      "expo-secure-store"
     ]
   }
 }
