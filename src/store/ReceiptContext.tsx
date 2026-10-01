@@ -1,8 +1,9 @@
-import React, { createContext, useContext, useState, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef, ReactNode } from 'react';
 import { Receipt, Participant, LineItem, PromoSplitMethod } from '../types';
 import { useReceiptHistory } from './useReceiptHistory';
+import { usePaymentDetails } from './usePaymentDetails';
 
-interface ReceiptContextType {
+interface ReceiptContextType extends ReturnType<typeof usePaymentDetails> {
   receipt: Receipt | null;
   savedReceipts: Receipt[];
   saveReceipt: (receipt: Receipt) => void;
@@ -29,9 +30,15 @@ interface ReceiptContextType {
 
 const ReceiptContext = createContext<ReceiptContextType | undefined>(undefined);
 
-export const ReceiptProvider = ({ children, userId }: { children: ReactNode; userId: string }) => {
+export const ReceiptProvider = ({ children, userId }: { children: ReactNode; userId?: string }) => {
   const [receipt, setReceipt] = useState<Receipt | null>(null);
+  const previousUser = useRef(userId);
+  useEffect(() => {
+    if (previousUser.current && previousUser.current !== userId) setReceipt(null);
+    previousUser.current = userId;
+  }, [userId]);
   const history = useReceiptHistory(userId);
+  const payments = usePaymentDetails(userId);
 
   const updateReceipt = (updates: Partial<Receipt>) => {
     setReceipt(prev => prev ? { ...prev, ...updates } : null);
@@ -196,6 +203,7 @@ export const ReceiptProvider = ({ children, userId }: { children: ReactNode; use
   return (
     <ReceiptContext.Provider value={{
       ...history,
+      ...payments,
       receipt,
       setReceipt,
       updateReceipt,

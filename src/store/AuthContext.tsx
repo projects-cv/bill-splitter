@@ -5,9 +5,14 @@ import { authApi, authRedirectUrl, isAuthConfigured } from '../auth/authClient';
 import { tokenStorage } from '../auth/tokenStorage';
 
 const AuthContext = createContext<AuthManager | null>(null);
+const LoginContext = createContext({ loginVisible: false, requestLogin: () => {}, dismissLogin: () => {} });
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [manager] = useState(() => new AuthManager(authApi, tokenStorage));
+  const [loginVisible, setLoginVisible] = useState(false);
+  useEffect(() => manager.subscribe(() => {
+    if (manager.getSnapshot().session) setLoginVisible(false);
+  }), [manager]);
   useEffect(() => {
     let active = true;
     let receivedLink = false;
@@ -47,12 +52,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       manager.dispose();
     };
   }, [manager]);
-  return <AuthContext.Provider value={manager}>{children}</AuthContext.Provider>;
+  return <AuthContext.Provider value={manager}>
+    <LoginContext.Provider value={{ loginVisible, requestLogin: () => setLoginVisible(true), dismissLogin: () => setLoginVisible(false) }}>
+      {children}
+    </LoginContext.Provider>
+  </AuthContext.Provider>;
 }
 
 export function useAuth() {
   const manager = useContext(AuthContext);
   if (!manager) throw new Error('useAuth must be used inside AuthProvider');
   const state = useSyncExternalStore(manager.subscribe, manager.getSnapshot, manager.getSnapshot);
-  return { ...state, isConfigured: isAuthConfigured, signOut: manager.signOut, retry: manager.retry };
+  const login = useContext(LoginContext);
+  return { ...state, ...login, isConfigured: isAuthConfigured, signOut: manager.signOut, retry: manager.retry };
 }

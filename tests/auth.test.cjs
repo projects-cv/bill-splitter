@@ -201,3 +201,38 @@ test('provider integration sends SMS signup-or-login and rejects unverified phon
   data.user.verifiedPhone = false;
   await assert.rejects(api.authApi.verify('token'), /verified phone/);
 });
+
+test('failed SMS requests expose safe references and useful actions without provider details', async () => {
+  process.env.EXPO_PUBLIC_DESCOPE_PROJECT_ID = 'test-project';
+  let response;
+  const api = loadModule('src/auth/authClient.ts', {
+    './authCore': core, 'react-native': { Platform: { OS: 'web' } },
+    '@descope/core-js-sdk': () => ({ magicLink: {
+      signUpOrIn: { sms: async () => response },
+    } }),
+  });
+  for (const [status, code, expected] of [
+    [400, 'E061003', /configured by the app owner/],
+    [401, 'E071001', /configured by the app owner/],
+    [400, 'E013009', /configured by the app owner/],
+    [400, 'E032106', /Check the number and country code/],
+    [429, 'E032101', /temporarily limited/],
+    [400, 'E032101', /contact the app owner/],
+    [503, 'E999999', /temporarily unavailable/],
+    [400, 'E123456', /contact the app owner/],
+    [400, 'phone +14155550123 token secret', /contact the app owner/],
+    [400, undefined, /contact the app owner/],
+  ]) {
+    response = { ok: false, code: status, error: {
+      errorCode: code, errorDescription: '+14155550123', errorMessage: 'token secret',
+    } };
+    await assert.rejects(api.sendLoginLink('+14155550123'), error => {
+      assert.ok(error instanceof AuthError);
+      assert.match(error.message, expected);
+      assert.doesNotMatch(error.message, /14155550123|secret/);
+      if (code && /^E\d{6}$/.test(code)) assert.ok(error.message.includes(`Reference: ${code}.`));
+      else assert.doesNotMatch(error.message, /Reference:/);
+      return true;
+    });
+  }
+});

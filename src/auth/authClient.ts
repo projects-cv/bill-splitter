@@ -44,8 +44,24 @@ async function toSession(data: JWTResponse, previousToken?: string): Promise<Aut
 
 export async function sendLoginLink(input: string): Promise<string> {
   const phone = normalizePhone(input);
-  check(await client().magicLink.signUpOrIn.sms(phone, authRedirectUrl),
-    'We could not send your login text. Please try again later.');
+  const response = await client().magicLink.signUpOrIn.sms(phone, authRedirectUrl);
+  if (!response.ok) {
+    // Provider descriptions can contain phone numbers or request details. Expose
+    // only the documented error identifier so a failure can be diagnosed safely.
+    const rawCode = response.error?.errorCode;
+    const code = typeof rawCode === 'string' && /^E\d{6}$/.test(rawCode) ? rawCode : '';
+    let message = 'We could not send your login text. Please contact the app owner.';
+    if (code === 'E032106') {
+      message = 'This phone number could not receive a text. Check the number and country code.';
+    } else if (['E061003', 'E071001', 'E013009'].includes(code)) {
+      message = 'Text login needs to be configured by the app owner.';
+    } else if (response.code === 429) {
+      message = 'Text requests are temporarily limited. Please wait before trying again.';
+    } else if (!response.code || response.code >= 500) {
+      message = 'The text service is temporarily unavailable. Please try again later.';
+    }
+    throw new AuthError(`${message}${code ? ` Reference: ${code}.` : ''}`);
+  }
   return phone;
 }
 

@@ -31,7 +31,8 @@ function storageModule(storage) {
   });
 }
 
-function hookHarness(history) {
+function hookHarness(history, initialUser = 'test-user') {
+  let userId = initialUser;
   const slots = [];
   let cursor, dirty = true, value, effects;
   const same = (a, b) => a && a.length === b.length && a.every((x, i) => Object.is(x, b[i]));
@@ -65,12 +66,13 @@ function hookHarness(history) {
     react, '../utils/receiptHistory': history,
   });
   return {
+    changeUser(next) { userId = next; dirty = true; },
     get value() { return value; },
     async flush() {
       for (let i = 0; i < 20; i++) {
         if (dirty) {
           dirty = false; cursor = 0; effects = [];
-          value = useReceiptHistory('test-user');
+          value = useReceiptHistory(userId);
           effects.forEach(run => run());
         }
         await new Promise(resolve => setImmediate(resolve));
@@ -175,6 +177,7 @@ test('tapping a real recent split selects it before navigating to Summary', () =
   const { default: Dashboard } = loadModule('src/screens/DashboardScreen.tsx', {
     react, 'react-native': native, '../theme/colors': { Colors: {} }, 'lucide-react-native': {},
     '../../package.json': { version: 'test' },
+    './PaymentDetailsButton': { default: 'PaymentDetailsButton' },
     '../store/ReceiptContext': { useReceipt: () => ({ savedReceipts: [split], setReceipt: value => actions.push(value) }) },
     '../store/AuthContext': { useAuth: () => ({ session: { user: { phone: '+14155550123' } }, signOut() {} }) },
   });
@@ -202,6 +205,46 @@ test('account histories are isolated and legacy receipts are imported only on re
   assert.deepEqual(await history.loadReceiptHistory('alice'), [receipt('alice'), receipt('legacy')]);
   assert.deepEqual(await history.loadReceiptHistory('bob'), [receipt('bob')]);
   assert.equal(await history.hasLegacyHistory(), false);
+});
+
+test('guests never read or persist history, and switching accounts keeps histories separate', async () => {
+  const storage = new Map();
+  const calls = [];
+  const history = storageModule({
+    getItem: async key => { calls.push(['read', key]); return storage.get(key) ?? null; },
+    setItem: async (key, value) => { calls.push(['write', key]); storage.set(key, value); },
+  });
+  const hook = hookHarness(history, null);
+  await hook.flush();
+  hook.value.saveReceipt(receipt('guest'));
+  await hook.flush();
+  assert.deepEqual(calls, []);
+  assert.deepEqual(hook.value.savedReceipts, []);
+  assert.equal(hook.value.isHistoryLoading, false);
+  hook.changeUser('alice');
+  await hook.flush();
+  hook.value.saveReceipt(receipt('alice-split'));
+  await hook.flush();
+  hook.changeUser('bob');
+  await hook.flush();
+  assert.deepEqual(hook.value.savedReceipts, []);
+  hook.value.saveReceipt(receipt('bob-split'));
+  await hook.flush();
+  hook.changeUser(undefined);
+  await hook.flush();
+  assert.deepEqual(hook.value.savedReceipts, []);
+  assert.deepEqual(await history.loadReceiptHistory('alice'), [receipt('alice-split')]);
+  assert.deepEqual(await history.loadReceiptHistory('bob'), [receipt('bob-split')]);
+});
+
+test('payment requests include personal destinations and validate input', () => {
+  const { normalizePaymentDetails, paymentRequestText } = loadModule('src/utils/paymentDetails.ts', {});
+  assert.equal(paymentRequestText({ venmo: '', zelle: '' }), '');
+  const details = normalizePaymentDetails({ venmo: ' @casey-name ', zelle: ' casey@example.com ' });
+  assert.match(paymentRequestText(details), /https:\/\/venmo.com\/casey-name/);
+  assert.match(paymentRequestText(details), /Zelle: casey@example.com/);
+  assert.throws(() => normalizePaymentDetails({ venmo: 'https://venmo.com/someone', zelle: '' }));
+  assert.throws(() => normalizePaymentDetails({ venmo: '', zelle: 'not-an-email' }));
 });
 
 test('an unsuccessful import preserves the original receipts', async () => {

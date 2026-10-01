@@ -4,13 +4,16 @@ import { AppNavigator } from './src/navigation/AppNavigator';
 import { ReceiptProvider } from './src/store/ReceiptContext';
 import { AuthProvider, useAuth } from './src/store/AuthContext';
 import LoginScreen from './src/screens/LoginScreen';
+import { Modal } from 'react-native';
 
 function AuthenticatedApp() {
-  const { session } = useAuth();
-  if (!session) return <LoginScreen />;
+  const { session, loginVisible, dismissLogin } = useAuth();
   return (
-    <ReceiptProvider key={session.user.id} userId={session.user.id}>
+    <ReceiptProvider userId={session?.user.id}>
       <AppNavigator />
+      <Modal visible={loginVisible && !session} animationType="slide" onRequestClose={dismissLogin}>
+        <LoginScreen />
+      </Modal>
     </ReceiptProvider>
   );
 }

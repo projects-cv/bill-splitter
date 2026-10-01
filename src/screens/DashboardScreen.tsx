@@ -7,26 +7,28 @@ import { Camera, Receipt as ReceiptIcon, ChevronRight } from 'lucide-react-nativ
 import packageJson from '../../package.json';
 import { useReceipt } from '../store/ReceiptContext';
 import { useAuth } from '../store/AuthContext';
+import PaymentDetailsButton from './PaymentDetailsButton';
 
 type Props = {
   navigation: NativeStackNavigationProp<RootStackParamList, 'Dashboard'>;
 };
 
 export default function DashboardScreen({ navigation }: Props) {
-  const { session, signOut } = useAuth();
+  const { session, signOut, requestLogin } = useAuth();
   const { savedReceipts, setReceipt, isHistoryLoading, historyError, retryHistory,
     hasLegacyReceipts, isImportingHistory, importLegacyReceipts } = useReceipt();
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <View style={styles.accountRow}>
-          <Text style={styles.accountPhone}>{session?.user.phone}</Text>
-          <TouchableOpacity accessibilityRole="button" onPress={() => { void signOut(); }} style={styles.signOutButton}>
-            <Text style={styles.retryText}>Sign out</Text>
+          <Text style={styles.accountPhone}>{session?.user.phone || 'Using as a guest'}</Text>
+          <TouchableOpacity accessibilityRole="button" onPress={() => { if (session) { setReceipt(null); void signOut(); } else requestLogin(); }} style={styles.signOutButton}>
+            <Text style={styles.retryText}>{session ? 'Sign out' : 'Sign in'}</Text>
           </TouchableOpacity>
         </View>
         <Text style={styles.greeting}>Your bill splits</Text>
         <Text style={styles.subtitle}>Let's split some bills!</Text>
+        <PaymentDetailsButton />
       </View>
 
       <View style={styles.actionContainer}>
@@ -43,6 +45,10 @@ export default function DashboardScreen({ navigation }: Props) {
       <View style={styles.listHeader}>
         <Text style={styles.sectionTitle}>Recent Splits</Text>
       </View>
+      {!session && <View style={styles.historyMessage}>
+        <Text style={styles.subtitle}>Scan and split without an account. Sign in to save your history on this device.</Text>
+        <TouchableOpacity style={styles.signOutButton} accessibilityRole="button" onPress={requestLogin}><Text style={styles.retryText}>Sign in to save history</Text></TouchableOpacity>
+      </View>}
 
       {hasLegacyReceipts && (
         <View style={styles.historyMessage}>
@@ -100,7 +106,7 @@ export default function DashboardScreen({ navigation }: Props) {
               {isHistoryLoading ? 'Loading recent splits…' : historyError ? 'Saved splits unavailable' : 'No recent splits yet'}
             </Text>
             {!isHistoryLoading && !historyError && (
-              <Text style={styles.subtitle}>Scan a receipt and calculate the split to save it here.</Text>
+              <Text style={styles.subtitle}>{session ? 'Scan a receipt and calculate the split to save it here.' : 'Your guest splits are not saved after you finish.'}</Text>
             )}
           </View>
         }

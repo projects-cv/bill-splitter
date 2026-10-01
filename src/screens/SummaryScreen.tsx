@@ -16,6 +16,9 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList, PromoSplitMethod } from '../types';
 import { useReceipt } from '../store/ReceiptContext';
 import { Colors } from '../theme/colors';
+import { useAuth } from '../store/AuthContext';
+import PaymentDetailsButton from './PaymentDetailsButton';
+import { paymentRequestText } from '../utils/paymentDetails';
 import { CheckCircle2, Home, MessageCircle, Pencil, Tag, Plus, Trash2, X, Check } from 'lucide-react-native';
 
 type Props = {
@@ -31,7 +34,11 @@ const amountLabels = {
 type AmountField = keyof typeof amountLabels;
 
 export default function SummaryScreen({ navigation }: Props) {
-  const { receipt, saveReceipt, updateReceipt, reset, applyPromoCode, removePromoCode, setPromoSplitMethod } = useReceipt();
+  const { receipt, saveReceipt, updateReceipt, reset, applyPromoCode, removePromoCode, setPromoSplitMethod, paymentDetails } = useReceipt();
+  const { session, requestLogin } = useAuth();
+  useEffect(() => {
+    if (!receipt) navigation.popToTop();
+  }, [receipt, navigation]);
   useEffect(() => {
     if (receipt) saveReceipt(receipt);
   }, [receipt, saveReceipt]);
@@ -206,13 +213,11 @@ export default function SummaryScreen({ navigation }: Props) {
   const handleShare = async (person: any) => {
     try {
       const amount = person.total.toFixed(2);
-      const note = encodeURIComponent(`Receipt from ${receipt.storeName}`);
-      const venmoLink = `https://venmo.com/?txn=pay&amount=${amount}&note=${note}`;
       let message = `Hey ${person.name}, you owe $${amount} for ${receipt.storeName}.`;
       if (person.discount > 0) {
         message += ` (Includes -$${person.discount.toFixed(2)} promo discount!)`;
       }
-      message += ` You can pay me here: ${venmoLink}`;
+      message += paymentRequestText(paymentDetails);
       
       await Share.share({
         message,
@@ -319,6 +324,15 @@ export default function SummaryScreen({ navigation }: Props) {
               </TouchableOpacity>
             )}
           </View>
+        </View>
+
+        <View style={styles.card}>
+          <Text style={styles.sectionTitle}>Text requests</Text>
+          <Text style={styles.noPromoText}>Send each person their share. Add your payment details to tell them where to pay.</Text>
+          <PaymentDetailsButton />
+          {!session && <TouchableOpacity style={styles.shareButton} accessibilityRole="button" onPress={requestLogin}>
+            <Text style={styles.shareText}>Sign in to save this split</Text>
+          </TouchableOpacity>}
         </View>
 
         {/* Receipt Overview */}

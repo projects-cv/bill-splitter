@@ -7,7 +7,7 @@ import { useAuth } from '../store/AuthContext';
 import { Colors } from '../theme/colors';
 
 export default function LoginScreen() {
-  const { loading, error: authError, canRetry, retry, isConfigured } = useAuth();
+  const { loading, error: authError, canRetry, retry, isConfigured, dismissLogin } = useAuth();
   const [phone, setPhone] = useState('');
   const [sentTo, setSentTo] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
@@ -45,7 +45,10 @@ export default function LoginScreen() {
           <View style={styles.card}>
             <View style={styles.icon}><Receipt stroke={Colors.primary} size={34} /></View>
             <Text style={styles.brand}>Bill Splitter</Text>
-            <Text style={styles.title}>{loading ? 'One moment…' : sentTo ? 'Check your texts' : 'Split the bill. Skip the hassle.'}</Text>
+            <TouchableOpacity style={styles.secondary} accessibilityRole="button" onPress={dismissLogin}>
+              <Text style={styles.secondaryText}>Continue without signing in</Text>
+            </TouchableOpacity>
+            <Text style={styles.title}>{loading ? 'One moment…' : sentTo ? 'Check your texts' : 'Save your splits and payment details'}</Text>
             {loading ? <ActivityIndicator color={Colors.primary} size="large" accessibilityLabel="Checking your session" /> : (
               <>
                 <Text style={styles.description}>
