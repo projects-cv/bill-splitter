@@ -50,3 +50,6 @@ There is no shared receipt backend in this app. If cloud storage or server APIs 
 ## License
 
 MIT
+
+
+## Git Commit Owner Change
