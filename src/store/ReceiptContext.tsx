@@ -1,8 +1,14 @@
 import React, { createContext, useContext, useState, ReactNode } from 'react';
 import { Receipt, Participant, LineItem, PromoSplitMethod } from '../types';
+import { useReceiptHistory } from './useReceiptHistory';
 
 interface ReceiptContextType {
   receipt: Receipt | null;
+  savedReceipts: Receipt[];
+  saveReceipt: (receipt: Receipt) => void;
+  isHistoryLoading: boolean;
+  historyError: string | null;
+  retryHistory: () => void;
   setReceipt: (receipt: Receipt | null) => void;
   updateReceipt: (updates: Partial<Receipt>) => void;
   addParticipant: (name: string, color: string) => void;
@@ -22,6 +28,7 @@ const ReceiptContext = createContext<ReceiptContextType | undefined>(undefined);
 
 export const ReceiptProvider = ({ children }: { children: ReactNode }) => {
   const [receipt, setReceipt] = useState<Receipt | null>(null);
+  const history = useReceiptHistory();
 
   const updateReceipt = (updates: Partial<Receipt>) => {
     setReceipt(prev => prev ? { ...prev, ...updates } : null);
@@ -185,6 +192,7 @@ export const ReceiptProvider = ({ children }: { children: ReactNode }) => {
 
   return (
     <ReceiptContext.Provider value={{
+      ...history,
       receipt,
       setReceipt,
       updateReceipt,

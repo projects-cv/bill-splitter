@@ -5,18 +5,14 @@ import { RootStackParamList } from '../types';
 import { Colors } from '../theme/colors';
 import { Camera, Receipt as ReceiptIcon, ChevronRight } from 'lucide-react-native';
 import packageJson from '../../package.json';
+import { useReceipt } from '../store/ReceiptContext';
 
 type Props = {
   navigation: NativeStackNavigationProp<RootStackParamList, 'Dashboard'>;
 };
 
-const MOCK_RECEIPTS = [
-  { id: '1', store: 'Olive Garden', date: 'Oct 15, 2023', amount: 85.50, youOwe: 28.50 },
-  { id: '2', store: 'Target', date: 'Oct 12, 2023', amount: 120.00, youOwe: 45.00 },
-  { id: '3', store: 'Shell Gas', date: 'Oct 10, 2023', amount: 45.00, youOwe: 22.50 },
-];
-
 export default function DashboardScreen({ navigation }: Props) {
+  const { savedReceipts, setReceipt, isHistoryLoading, historyError, retryHistory } = useReceipt();
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
@@ -37,31 +33,58 @@ export default function DashboardScreen({ navigation }: Props) {
 
       <View style={styles.listHeader}>
         <Text style={styles.sectionTitle}>Recent Splits</Text>
-        <TouchableOpacity>
-          <Text style={styles.seeAll}>See All</Text>
-        </TouchableOpacity>
       </View>
 
+      {historyError && (
+        <View style={styles.historyMessage}>
+          <Text style={styles.errorText} accessibilityRole="alert">{historyError}</Text>
+          <TouchableOpacity onPress={retryHistory} accessibilityRole="button" disabled={isHistoryLoading}>
+            <Text style={styles.retryText}>Try Again</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
       <FlatList
-        data={MOCK_RECEIPTS}
+        data={savedReceipts}
         keyExtractor={(item) => item.id}
         contentContainerStyle={styles.listContainer}
         renderItem={({ item }) => (
-          <TouchableOpacity style={styles.receiptCard} activeOpacity={0.7}>
+          <TouchableOpacity
+            style={styles.receiptCard}
+            activeOpacity={0.7}
+            accessibilityRole="button"
+            accessibilityLabel={`Open split from ${item.storeName}, ${item.date}, $${item.total.toFixed(2)}`}
+            onPress={() => {
+              setReceipt(item);
+              navigation.navigate('Summary', { receiptId: item.id });
+            }}
+          >
             <View style={styles.iconContainer}>
               <ReceiptIcon stroke={Colors.primary} size={24} />
             </View>
             <View style={styles.receiptInfo}>
-              <Text style={styles.storeName}>{item.store}</Text>
+              <Text style={styles.storeName}>{item.storeName}</Text>
               <Text style={styles.dateText}>{item.date}</Text>
             </View>
             <View style={styles.amountInfo}>
-              <Text style={styles.amountText}>${item.amount.toFixed(2)}</Text>
-              <Text style={styles.oweText}>You owe ${item.youOwe.toFixed(2)}</Text>
+              <Text style={styles.amountText}>${item.total.toFixed(2)}</Text>
+              <Text style={styles.participantText}>
+                {item.participants.length} {item.participants.length === 1 ? 'person' : 'people'}
+              </Text>
             </View>
             <ChevronRight stroke={Colors.border} size={20} />
           </TouchableOpacity>
         )}
+        ListEmptyComponent={
+          <View style={styles.emptyState}>
+            <Text style={styles.storeName}>
+              {isHistoryLoading ? 'Loading recent splits…' : historyError ? 'Saved splits unavailable' : 'No recent splits yet'}
+            </Text>
+            {!isHistoryLoading && !historyError && (
+              <Text style={styles.subtitle}>Scan a receipt and calculate the split to save it here.</Text>
+            )}
+          </View>
+        }
       />
 
       <View style={styles.footer}>
@@ -128,10 +151,23 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: Colors.text,
   },
-  seeAll: {
+  retryText: {
     fontSize: 14,
     color: Colors.primary,
     fontWeight: '600',
+  },
+  historyMessage: {
+    marginHorizontal: 24,
+    marginBottom: 16,
+    gap: 8,
+  },
+  errorText: {
+    color: Colors.danger,
+    fontSize: 14,
+  },
+  emptyState: {
+    paddingVertical: 24,
+    gap: 8,
   },
   listContainer: {
     paddingHorizontal: 24,
@@ -184,9 +220,9 @@ const styles = StyleSheet.create({
     color: Colors.text,
     marginBottom: 4,
   },
-  oweText: {
+  participantText: {
     fontSize: 13,
-    color: Colors.warning,
+    color: Colors.textMuted,
     fontWeight: '500',
   },
   footer: {

@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { 
   View, 
   Text, 
@@ -31,7 +31,10 @@ const amountLabels = {
 type AmountField = keyof typeof amountLabels;
 
 export default function SummaryScreen({ navigation }: Props) {
-  const { receipt, updateReceipt, reset, applyPromoCode, removePromoCode, setPromoSplitMethod } = useReceipt();
+  const { receipt, saveReceipt, updateReceipt, reset, applyPromoCode, removePromoCode, setPromoSplitMethod } = useReceipt();
+  useEffect(() => {
+    if (receipt) saveReceipt(receipt);
+  }, [receipt, saveReceipt]);
   const [editingAmount, setEditingAmount] = useState<AmountField | null>(null);
   const [amountInput, setAmountInput] = useState('');
   const [amountError, setAmountError] = useState<string | null>(null);
